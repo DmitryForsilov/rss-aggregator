@@ -2,4 +2,4 @@
 
 ## RSS Reader
 
-[Ссылка на проект](https://frontend-project-lvl3-drab.vercel.app/)
+<a href="https://frontend-project-lvl3-drab.vercel.app/" target="_blank">Ссылка на проект</a>

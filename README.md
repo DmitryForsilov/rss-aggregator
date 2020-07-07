@@ -1,3 +1,5 @@
+![CI](https://github.com/DmitryForsilov/frontend-project-lvl3/workflows/CI/badge.svg)
+
 # frontend-project-lvl3
 
 ## RSS Reader

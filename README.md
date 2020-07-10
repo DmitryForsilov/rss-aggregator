@@ -5,4 +5,6 @@
 
 ## RSS Reader
 
+Rss рассылка.
+
 [Ссылка на проект](https://frontend-project-lvl3-drab.vercel.app/)

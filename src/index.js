@@ -1,24 +1,49 @@
-import onChange from 'on-change';
 import * as yup from 'yup';
 import _ from 'lodash';
 import axios from 'axios';
+import parse from './parse.js';
+import makeWatchedState from './makeWatchedState.js';
+import 'bootstrap';
 
-const schema = yup.object().shape({
-  url: yup.string().required().url(),
-  // сделать валидацию на дубли
-});
+const makeUrlWithProxy = (url) => {
+  const proxy = 'https://cors-anywhere.herokuapp.com/';
+  const normalizeUrl = url.replace(/^https?:\/\//i, '');
+
+  return `${proxy}${normalizeUrl}`;
+};
 
 const messages = {
   submitFormState: {
     sending: 'Please, wait...',
     finished: 'Rss feed loaded successfully!',
-    failed: 'Connection problems. Please, try again.',
+    /* failed: 'Connection problems. Please, try again.', */
+  },
+  errors: {
+    unsupportedFeedFormat: 'Unsupported feed format.',
+    feedIsNotUnique: 'This feed is already exist',
   },
 };
 
-const validateForm = (fields) => {
+// eslint-disable-next-line func-names
+yup.addMethod(yup.string, 'isFeedUnique', function (urls) {
+  // eslint-disable-next-line func-names
+  return this.test(function (value) {
+    const { path, createError } = this;
+    const isUnique = !urls.some((url) => url === makeUrlWithProxy(value));
+
+    return isUnique ? value : createError({ path, message: messages.errors.feedIsNotUnique });
+  });
+});
+
+const validateForm = (state) => {
+  const urls = state.feeds.map(({ requestUrl }) => requestUrl);
+
+  const schema = yup.object().shape({
+    url: yup.string().url().isFeedUnique(urls).required(),
+  });
+
   try {
-    schema.validateSync(fields, { abortEarly: false });
+    schema.validateSync(state.form.fields, { abortEarly: false });
 
     return {};
   } catch (error) {
@@ -26,94 +51,68 @@ const validateForm = (fields) => {
   }
 };
 
-const updateValidationState = (state) => {
-  const errors = validateForm(state.form.fields);
+const processFeedData = (data) => {
+  const feedId = _.uniqueId();
 
-  if (_.isEqual(errors, {})) {
+  const feed = {
+    id: feedId,
+    requestUrl: data.requestUrl,
+    title: data.title,
+    /* description: data.description, */
+  };
+
+  const posts = data.posts.map((post) => ({
+    id: _.uniqueId(),
+    feedId,
+    title: post.title,
+    link: post.link,
+  }));
+
+  return { feed, posts };
+};
+
+const updateValidationState = (state) => {
+  const error = validateForm(state);
+
+  if (_.isEqual(error, {})) {
     state.form.valid = true;
     state.form.errors = {};
   } else {
     state.form.valid = false;
-    state.form.errors = errors;
+    state.form.errors = error;
   }
 };
 
-const renderInputError = (errors, input, feedbackElement) => {
-  const error = errors[input.name];
-
-  if (!error) {
-    feedbackElement.textContent = '';
-    feedbackElement.classList.remove('text-danger');
-    input.classList.remove('is-invalid');
-
-    return;
-  }
-
-  input.classList.add('is-invalid');
-  feedbackElement.classList.add('text-danger');
-  feedbackElement.textContent = error.message;
-};
-
-const renderSubmitFormState = (processState, formElements, feedbackElement) => {
-  switch (processState) {
-    case 'filling':
-      feedbackElement.textContent = '';
-      feedbackElement.classList.remove('alert-info', 'alert-success', 'alert-danger');
-      break;
-    case 'sending':
-      formElements.button.disabled = true;
-      formElements.url.disabled = true;
-      feedbackElement.classList.add('alert-info');
-      feedbackElement.textContent = messages.submitFormState.sending;
-      break;
-    case 'finished':
-      formElements.button.disabled = false;
-      formElements.url.disabled = false;
-      feedbackElement.classList.add('alert-success');
-      feedbackElement.textContent = messages.submitFormState.finished;
-      break;
-    case 'failed':
-      formElements.button.disabled = false;
-      formElements.url.disabled = false;
-      feedbackElement.classList.add('alert-danger');
-      feedbackElement.textContent = messages.submitFormState.failed;
-      break;
-    default:
-      throw new Error(`Unknown state: ${processState}`);
-  }
+const updateFeedsState = (state, feedData) => {
+  // завязано на порядок добавления. Исправить?
+  state.posts = [...state.posts, ...feedData.posts];
+  state.feeds = [...state.feeds, feedData.feed];
 };
 
 const runApp = () => {
   const state = {
     form: {
       processState: 'filling',
+      processError: null,
       fields: {
         url: '',
       },
       valid: false,
       errors: {},
     },
+    feeds: [],
+    posts: [],
   };
-
-  const proxy = 'https://cors-anywhere.herokuapp.com/';
-  const xmlParser = new DOMParser();
 
   const { form } = document.forms;
   const formElements = {
     url: form.elements.url,
     button: form.elements.button,
+    feedback: form.querySelector('.feedback'),
   };
-  const feedbackElement = document.querySelector('.feedback');
+  const feedsContainer = document.querySelector('.accordion');
 
-  const watchedState = onChange(state, (path) => {
-    if (path === 'form.errors') {
-      renderInputError(watchedState.form.errors, formElements.url, feedbackElement);
-    } else if (path === 'form.valid') {
-      formElements.button.disabled = !watchedState.form.valid;
-    } else if (path === 'form.processState') {
-      renderSubmitFormState(watchedState.form.processState, formElements, feedbackElement);
-    }
-  });
+  const watchedState = makeWatchedState(state, formElements, feedsContainer, messages);
 
   const formInputHandler = (event) => {
     const field = event.target;
@@ -127,28 +126,17 @@ const runApp = () => {
     event.preventDefault();
 
     watchedState.form.processState = 'sending';
-
-    const url = formElements.url.value.replace(/^https?:\/\//i, '');
+    const urlWithProxy = makeUrlWithProxy(formElements.url.value);
 
     axios({
       method: 'get',
-      url: `${proxy}${url}`,
+      url: urlWithProxy,
     })
-      .then(({ data }) => {
-        const parsedData = xmlParser.parseFromString(data, 'text/xml');
+      .then((response) => {
+        const parsedData = parse(response);
+        const feedData = processFeedData(parsedData);
 
-        /* console.log(parsedData); */
-        /* console.log(parsedData.querySelector('channel > title').textContent); */
-        const feedTitle = parsedData.querySelector('channel > title').textContent;
-        const feedDescription = parsedData.querySelector('channel > description').textContent;
-        const feedPosts = [...parsedData.querySelectorAll('item')]
-          .map((postNode) => ({
-            title: postNode.querySelector('title').textContent,
-            link: postNode.querySelector('link').textContent,
-          }));
-        console.log(feedTitle);
-        console.log(feedDescription);
-        console.log(feedPosts);
+        updateFeedsState(watchedState, feedData);
 
         watchedState.form.processState = 'finished';
 
@@ -156,11 +144,16 @@ const runApp = () => {
           watchedState.form.processState = 'filling';
           form.reset();
           watchedState.form.valid = false;
-        }, 2000);
+        }, 1500);
       })
       .catch((error) => {
+        if (error.response) {
+          watchedState.form.processError = `Network issue: ${error.response.status} ${error.response.statusText} `;
+        } else {
+          watchedState.form.processError = messages.errors.unsupportedFeedFormat;
+        }
+
         watchedState.form.processState = 'failed';
-        console.log(error);
       });
   };
 

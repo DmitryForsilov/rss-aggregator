@@ -1,50 +1,68 @@
 import onChange from 'on-change';
+import i18next from 'i18next';
 
-const renderInputError = (state, formElements) => {
-  const error = state.form.errors[formElements.url.name];
+const resetInputValidation = (input) => {
+  input.classList.remove('is-invalid', 'is-valid');
+};
+
+const toggleInputValidation = (input, isValid) => {
+  resetInputValidation(input);
+
+  if (isValid) {
+    input.classList.add('is-valid');
+  } else {
+    input.classList.add('is-invalid');
+  }
+};
+
+const renderInputError = (state, { urlInput, feedback }) => {
+  const error = state.form.errors[urlInput.name];
 
   if (!error) {
-    formElements.feedback.textContent = '';
-    formElements.feedback.classList.remove('text-danger');
-    formElements.url.classList.remove('is-invalid');
-    formElements.url.classList.add('is-valid');
+    feedback.textContent = '';
+    feedback.classList.remove('text-danger');
+
+    toggleInputValidation(urlInput, true);
 
     return;
   }
 
-  formElements.feedback.textContent = error.message;
-  formElements.feedback.classList.add('text-danger');
-  formElements.url.classList.remove('is-valid');
-  formElements.url.classList.add('is-invalid');
+  feedback.textContent = error.message;
+  feedback.classList.add('text-danger');
+
+  toggleInputValidation(urlInput, false);
 };
 
-const renderSubmitFormState = (state, formElements, messages) => {
+const renderFormElements = (domElements, areElementsDisabled, feedbackClass, feedbackText) => {
+  const { urlInput, submitButton, feedback } = domElements;
+
+  submitButton.disabled = areElementsDisabled;
+  urlInput.disabled = areElementsDisabled;
+  feedback.classList.remove('alert-info', 'alert-success', 'alert-danger');
+  feedback.classList.add(feedbackClass);
+  feedback.textContent = feedbackText;
+};
+
+const renderSubmitFormState = (state, domElements) => {
+  const { form, urlInput, feedback } = domElements;
+
   switch (state.form.processState) {
     case 'filling':
-      formElements.feedback.textContent = '';
-      formElements.feedback.classList.remove('alert-info', 'alert-success', 'alert-danger');
-      formElements.url.classList.remove('is-valid');
+      feedback.textContent = '';
+      feedback.classList.remove('alert-info', 'alert-success', 'alert-danger');
+
+      resetInputValidation(urlInput);
       break;
     case 'sending':
-      formElements.button.disabled = true;
-      formElements.url.disabled = true;
-      formElements.feedback.classList.remove('alert-success', 'alert-danger');
-      formElements.feedback.classList.add('alert-info');
-      formElements.feedback.textContent = messages.submitFormState.sending;
+      renderFormElements(domElements, true, 'alert-info', i18next.t('submitFormState.sending'));
       break;
     case 'finished':
-      formElements.button.disabled = false;
-      formElements.url.disabled = false;
-      formElements.feedback.classList.remove('alert-info', 'alert-danger');
-      formElements.feedback.classList.add('alert-success');
-      formElements.feedback.textContent = messages.submitFormState.finished;
+      renderFormElements(domElements, false, 'alert-success', i18next.t('submitFormState.finished'));
+      form.reset();
       break;
     case 'failed':
-      formElements.button.disabled = false;
-      formElements.url.disabled = false;
-      formElements.feedback.classList.remove('alert-info', 'alert-success');
-      formElements.feedback.classList.add('alert-danger');
-      formElements.feedback.textContent = state.form.processError;
+      renderFormElements(domElements, false, 'alert-danger', state.form.processError);
+      resetInputValidation(urlInput);
       break;
     default:
       throw new Error(`Unknown state: ${state.form.processState}`);
@@ -81,7 +99,7 @@ const createFeedElement = ({ feed, posts }) => {
   return feedContainer;
 };
 
-const renderFeeds = (feeds, feedsContainer) => {
+const renderFeeds = (feeds, { feedsContainer }) => {
   feedsContainer.innerHTML = '';
 
   feeds.forEach((feed) => {
@@ -89,16 +107,14 @@ const renderFeeds = (feeds, feedsContainer) => {
   });
 };
 
-const makeWatchedState = (state, formElements, feedsContainer, messages) => {
+const makeWatchedState = (state, domElements) => {
   const watchedState = onChange(state, (path) => {
     if (path === 'form.errors') {
-      renderInputError(watchedState, formElements);
+      renderInputError(watchedState, domElements);
     } else if (path === 'form.valid') {
-      formElements.button.disabled = !watchedState.form.valid;
+      domElements.submitButton.disabled = !watchedState.form.valid;
     } else if (path === 'form.processState') {
-      renderSubmitFormState(
-        watchedState, formElements, messages,
-      );
+      renderSubmitFormState(watchedState, domElements);
     } else if (path === 'feeds') {
       const feeds = state.feeds.map((feed) => {
         const posts = state.posts.filter(({ feedId }) => feedId === feed.id);
@@ -106,7 +122,7 @@ const makeWatchedState = (state, formElements, feedsContainer, messages) => {
         return createFeedElement({ feed, posts });
       });
 
-      renderFeeds(feeds, feedsContainer);
+      renderFeeds(feeds, domElements);
     }
   });
 

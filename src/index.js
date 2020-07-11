@@ -1,9 +1,11 @@
 import * as yup from 'yup';
 import _ from 'lodash';
+import i18next from 'i18next';
 import axios from 'axios';
 import parse from './parse.js';
 import makeWatchedState from './makeWatchedState.js';
 import 'bootstrap';
+import en from './locales/en.js';
 
 const makeUrlWithProxy = (url) => {
   const proxy = 'https://cors-anywhere.herokuapp.com/';
@@ -12,26 +14,12 @@ const makeUrlWithProxy = (url) => {
   return `${proxy}${normalizeUrl}`;
 };
 
-const messages = {
-  submitFormState: {
-    sending: 'Please, wait...',
-    finished: 'Rss feed loaded successfully!',
-    /* failed: 'Connection problems. Please, try again.', */
-  },
-  errors: {
-    unsupportedFeedFormat: 'Unsupported feed format.',
-    feedIsNotUnique: 'This feed is already exist',
-  },
-};
-
-// eslint-disable-next-line func-names
-yup.addMethod(yup.string, 'isFeedUnique', function (urls) {
-  // eslint-disable-next-line func-names
-  return this.test(function (value) {
+yup.addMethod(yup.string, 'isFeedUnique', function (urls) { // eslint-disable-line func-names
+  return this.test(function (value) { // eslint-disable-line func-names
     const { path, createError } = this;
     const isUnique = !urls.some((url) => url === makeUrlWithProxy(value));
 
-    return isUnique ? value : createError({ path, message: messages.errors.feedIsNotUnique });
+    return isUnique ? value : createError({ path, message: i18next.t('errors.feedIsNotUnique') });
   });
 });
 
@@ -89,7 +77,23 @@ const updateFeedsState = (state, feedData) => {
   state.feeds = [...state.feeds, feedData.feed];
 };
 
-const runApp = () => {
+const domElements = {
+  form: document.forms.form,
+  urlInput: document.forms.form.elements.url,
+  submitButton: document.forms.form.elements.button,
+  feedback: document.forms.form.querySelector('.feedback'),
+  feedsContainer: document.querySelector('.accordion'),
+};
+
+const runApp = async () => {
+  await i18next.init({
+    lng: 'en',
+    debug: true,
+    resources: {
+      en,
+    },
+  });
+
   const state = {
     form: {
       processState: 'filling',
@@ -104,15 +108,7 @@ const runApp = () => {
     posts: [],
   };
 
-  const { form } = document.forms;
-  const formElements = {
-    url: form.elements.url,
-    button: form.elements.button,
-    feedback: form.querySelector('.feedback'),
-  };
-  const feedsContainer = document.querySelector('.accordion');
-
-  const watchedState = makeWatchedState(state, formElements, feedsContainer, messages);
+  const watchedState = makeWatchedState(state, domElements);
 
   const formInputHandler = (event) => {
     const field = event.target;
@@ -126,7 +122,7 @@ const runApp = () => {
     event.preventDefault();
 
     watchedState.form.processState = 'sending';
-    const urlWithProxy = makeUrlWithProxy(formElements.url.value);
+    const urlWithProxy = makeUrlWithProxy(domElements.urlInput.value);
 
     axios({
       method: 'get',
@@ -142,7 +138,6 @@ const runApp = () => {
 
         setTimeout(() => {
           watchedState.form.processState = 'filling';
-          form.reset();
           watchedState.form.valid = false;
         }, 1500);
       })
@@ -150,15 +145,15 @@ const runApp = () => {
         if (error.response) {
           watchedState.form.processError = `Network issue: ${error.response.status} ${error.response.statusText} `;
         } else {
-          watchedState.form.processError = messages.errors.unsupportedFeedFormat;
+          watchedState.form.processError = i18next.t('errors.unsupportedFeedFormat');
         }
 
         watchedState.form.processState = 'failed';
       });
   };
 
-  form.addEventListener('input', formInputHandler);
-  form.addEventListener('submit', formSubmitHandler);
+  domElements.form.addEventListener('input', formInputHandler);
+  domElements.form.addEventListener('submit', formSubmitHandler);
 };
 
 runApp();

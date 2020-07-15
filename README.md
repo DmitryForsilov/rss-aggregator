@@ -3,8 +3,32 @@
 
 # frontend-project-lvl3
 
-## RSS Reader
+## RSS Aggregator
 
-Rss рассылка.
+[Link to deployed project](https://frontend-project-lvl3-drab.vercel.app/)
 
-[Ссылка на проект](https://frontend-project-lvl3-drab.vercel.app/)
+### Features:
+- Form input validation
+- Form submit validation
+- Rendering errors and another messages
+- Posts autoupdate (request in every 5 seconds)
+
+### Used in project:
+- MVC
+- HTML
+- JavaScript
+- bootstrap components
+- lodash functions
+- yup for validation
+- i18next for text use
+- axios for AJAX-requests
+- on-change for state watching
+- assembly via webpack
+- deploy on vercel
+
+### Rss URLs you can use:
+```
+http://lorem-rss.herokuapp.com/feed (updates once a minute)
+http://lorem-rss.herokuapp.com//feed?unit=second&interval=30 (update every 30 seconds)
+https://developer.mozilla.org/ru/docs/feeds/rss/all
+```

@@ -76,6 +76,7 @@ const createFeedElement = ({ feed, posts }, state) => {
   openFeedButton.addEventListener('click', () => {
     resetBadge();
 
+    // Реализация удаления бейджика через state
     const currentFeed = state.feeds.find(({ id }) => id === feed.id);
     const currentFeedIndex = state.feeds.indexOf(currentFeed);
     state.feeds[currentFeedIndex].badge = null;

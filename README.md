@@ -14,17 +14,17 @@
 - Posts autoupdate (request in every 5 seconds)
 
 ### Used in project:
-- MVC
-- HTML
-- JavaScript
-- bootstrap components
-- lodash functions
-- yup for validation
-- i18next for text use
-- axios for AJAX-requests
-- on-change for state watching
-- assembly via webpack
-- deploy on vercel
+- **MVC**
+- **HTML**
+- **JavaScript**
+- **bootstrap** components
+- **lodash** functions
+- **yup** for validation
+- **i18next** for text use
+- **axios** for AJAX-requests
+- **on-change** for state watching
+- assembly via **webpack**
+- deploy on **vercel**
 
 ### Examples of RSS URLs you can use:
 ```

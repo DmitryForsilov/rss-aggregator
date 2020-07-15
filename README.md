@@ -8,6 +8,7 @@
 [Link to deployed project](https://frontend-project-lvl3-drab.vercel.app/)
 
 ### Features:
+- Adding multiple RSS feeds
 - Form input validation
 - Form submit validation
 - Rendering errors and another messages

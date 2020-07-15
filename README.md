@@ -18,6 +18,7 @@
 - **MVC**
 - **HTML**
 - **JavaScript**
+- **es lint** for code style
 - **bootstrap** components
 - **lodash** functions
 - **yup** for validation
@@ -25,6 +26,7 @@
 - **axios** for AJAX-requests
 - **on-change** for state watching
 - assembly via **webpack**
+- CI via **github actions**
 - deploy on **vercel**
 
 ### Examples of RSS URLs you can use:

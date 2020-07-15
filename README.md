@@ -26,7 +26,7 @@
 - assembly via webpack
 - deploy on vercel
 
-### Rss URLs you can use:
+### Examples of RSS URLs you can use:
 ```
 http://lorem-rss.herokuapp.com/feed (updates once a minute)
 http://lorem-rss.herokuapp.com//feed?unit=second&interval=30 (update every 30 seconds)

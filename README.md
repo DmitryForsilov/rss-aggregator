@@ -29,6 +29,6 @@
 ### Examples of RSS URLs you can use:
 ```
 http://lorem-rss.herokuapp.com/feed (updates once a minute)
-http://lorem-rss.herokuapp.com//feed?unit=second&interval=30 (update every 30 seconds)
+http://lorem-rss.herokuapp.com/feed?unit=second&interval=30 (update every 30 seconds)
 https://developer.mozilla.org/ru/docs/feeds/rss/all
 ```

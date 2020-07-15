@@ -6,10 +6,11 @@ import parse from './parse.js';
 import makeWatchedState from './makeWatchedState.js';
 import 'bootstrap';
 import en from './locales/en.js';
+import PostsAutoupdater from './PostsAutoupdater.js';
 
 const makeUrlWithProxy = (url) => {
   const proxy = 'https://cors-anywhere.herokuapp.com/';
-  const normalizeUrl = url.replace(/^https?:\/\//i, '');
+  const normalizeUrl = url.trim().replace(/^https?:\/\//i, '');
 
   return `${proxy}${normalizeUrl}`;
 };
@@ -44,19 +45,23 @@ const processFeedData = (data) => {
 
   const feed = {
     id: feedId,
-    requestUrl: data.requestUrl,
-    title: data.title,
-    /* description: data.description, */
+    updated: false,
+    updateError: null,
+    badge: null,
+    ...data,
   };
 
-  const posts = data.posts.map((post) => ({
+  return feed;
+};
+
+const processPostsData = (postsData, feedId) => {
+  const posts = postsData.map((data) => ({
     id: _.uniqueId(),
     feedId,
-    title: post.title,
-    link: post.link,
+    ...data,
   }));
 
-  return { feed, posts };
+  return posts;
 };
 
 const updateValidationState = (state) => {
@@ -71,10 +76,47 @@ const updateValidationState = (state) => {
   }
 };
 
-const updateFeedsState = (state, feedData) => {
-  // завязано на порядок добавления. Исправить?
-  state.posts = [...state.posts, ...feedData.posts];
-  state.feeds = [...state.feeds, feedData.feed];
+const updateFeedsState = (state, feed) => {
+  state.feeds = [...state.feeds, feed];
+};
+
+const updatePostsState = (state, posts) => {
+  state.posts = [...state.posts, ...posts];
+};
+
+const checkNewPostsCallback = (state) => (postsAutoupdater) => {
+  const currentFeed = state.feeds.find(({ id }) => id === postsAutoupdater._feedId);
+  const currentFeedIndex = state.feeds.indexOf(currentFeed);
+
+  state.feeds[currentFeedIndex].updated = false;
+
+  axios({
+    method: 'get',
+    url: postsAutoupdater._requestUrl,
+  })
+    .then((response) => {
+      const { postsData } = parse(response);
+      const posts = processPostsData(postsData, postsAutoupdater._feedId);
+      const currentPosts = state.posts.filter((post) => post.feedId === postsAutoupdater._feedId);
+      const newPosts = _.differenceBy(posts, currentPosts, 'title');
+
+      if (newPosts.length > 0) {
+        updatePostsState(state, newPosts);
+
+        state.feeds[currentFeedIndex].badge = 'success';
+        state.feeds[currentFeedIndex].updated = true;
+      }
+    })
+    .catch((error) => {
+      state.feeds[currentFeedIndex].badge = 'fail';
+      state.feeds[currentFeedIndex].updated = 'failed';
+
+      if (error.response) {
+        state.feeds[currentFeedIndex].updateError = i18next.t('postsUpdated.fail', { issue: `${error.response.status} ${error.response.statusText}` });
+      } else {
+        state.feeds[currentFeedIndex].updateError = i18next.t('postsUpdated.fail', { issue: 'Unknown issue.' });
+      }
+    });
 };
 
 const domElements = {
@@ -114,7 +156,7 @@ const runApp = async () => {
     const field = event.target;
 
     watchedState.form.processState = 'filling';
-    watchedState.form.fields[field.name] = field.value;
+    watchedState.form.fields[field.name] = field.value.trim();
     updateValidationState(watchedState);
   };
 
@@ -129,21 +171,25 @@ const runApp = async () => {
       url: urlWithProxy,
     })
       .then((response) => {
-        const parsedData = parse(response);
-        const feedData = processFeedData(parsedData);
+        const { title, postsData, requestUrl } = parse(response);
+        const feed = processFeedData({ title, requestUrl });
+        const posts = processPostsData(postsData, feed.id);
 
-        updateFeedsState(watchedState, feedData);
+        updateFeedsState(watchedState, feed);
+        updatePostsState(watchedState, posts);
+
+        const intervalInSeconds = 5;
+        const postsAutoupdater = new PostsAutoupdater(
+          feed.id, urlWithProxy, checkNewPostsCallback(watchedState),
+        );
+        postsAutoupdater.setAutoupdate(intervalInSeconds);
 
         watchedState.form.processState = 'finished';
-
-        setTimeout(() => {
-          watchedState.form.processState = 'filling';
-          watchedState.form.valid = false;
-        }, 1500);
+        watchedState.form.valid = false;
       })
       .catch((error) => {
         if (error.response) {
-          watchedState.form.processError = `Network issue: ${error.response.status} ${error.response.statusText} `;
+          watchedState.form.processError = i18next.t('errors.networkIssue', { errorStatus: error.response.status, errorText: error.response.statusText });
         } else {
           watchedState.form.processError = i18next.t('errors.unsupportedFeedFormat');
         }

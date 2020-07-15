@@ -1,6 +1,16 @@
 import onChange from 'on-change';
 import i18next from 'i18next';
 
+const doAfterDelay = (functions, delayInSec) => {
+  setTimeout(() => {
+    functions.forEach((func) => func());
+  }, delayInSec * 1000);
+};
+
+const toggleSubmitButton = (submitButton, disabled) => {
+  submitButton.disabled = disabled;
+};
+
 const resetInputValidation = (input) => {
   input.classList.remove('is-invalid', 'is-valid');
 };
@@ -13,6 +23,79 @@ const toggleInputValidation = (input, isValid) => {
   } else {
     input.classList.add('is-invalid');
   }
+};
+
+const resetFeedback = (feedbackElement) => {
+  feedbackElement.textContent = '';
+  feedbackElement.classList.remove('alert-info', 'alert-success', 'alert-danger');
+};
+
+const createFeedElement = ({ feed, posts }, state) => {
+  const feedContentMarkup = `
+    <div class="card-header" id="${feed.id}">
+      <h2 class="mb-0">
+        <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapse-${feed.id}" aria-expanded="true" aria-controls="collapse-${feed.id}">
+          ${feed.title}<span class="badge ml-2"></span>
+        </button>
+      </h2>
+    </div>
+
+    <div id="collapse-${feed.id}" class="collapse" aria-labelledby="${feed.id}" data-parent="#accordion">
+      <div id="posts-container" class="card-body">
+      </div>
+    </div>
+  `;
+
+  const feedContainer = document.createElement('div');
+  feedContainer.classList.add('card');
+  feedContainer.insertAdjacentHTML('afterbegin', feedContentMarkup);
+
+  const postsContainer = feedContainer.querySelector('#posts-container');
+  const postsMarkup = posts.map(({ title, link }) => `
+    <a class="btn btn-outline-info m-1" href="${link}" target="_blank">${title}</a>
+  `);
+
+  postsContainer.insertAdjacentHTML('afterbegin', postsMarkup.join(''));
+
+  const openFeedButton = feedContainer.querySelector('.btn');
+  const badge = feedContainer.querySelector('.badge');
+
+  const resetBadge = () => {
+    badge.classList.remove('badge-success', 'badge-warning');
+    badge.textContent = '';
+  };
+
+  if (feed.badge === 'success') {
+    badge.classList.add('badge-success');
+    badge.textContent = i18next.t('postsUpdated.sucess');
+  } else if (feed.badge === 'fail') {
+    badge.classList.add('badge-warning');
+    badge.textContent = feed.updateError;
+  }
+
+  openFeedButton.addEventListener('click', () => {
+    resetBadge();
+
+    const currentFeed = state.feeds.find(({ id }) => id === feed.id);
+    const currentFeedIndex = state.feeds.indexOf(currentFeed);
+    state.feeds[currentFeedIndex].badge = null;
+  });
+
+  return feedContainer;
+};
+
+const renderFeeds = (state, { feedsContainer }) => {
+  const feeds = state.feeds.map((feed) => {
+    const posts = state.posts.filter(({ feedId }) => feedId === feed.id);
+
+    return createFeedElement({ feed, posts }, state);
+  });
+
+  feedsContainer.innerHTML = '';
+
+  feeds.forEach((feed) => {
+    feedsContainer.appendChild(feed);
+  });
 };
 
 const renderInputError = (state, { urlInput, feedback }) => {
@@ -36,21 +119,21 @@ const renderInputError = (state, { urlInput, feedback }) => {
 const renderFormElements = (domElements, areElementsDisabled, feedbackClass, feedbackText) => {
   const { urlInput, submitButton, feedback } = domElements;
 
-  submitButton.disabled = areElementsDisabled;
+  toggleSubmitButton(submitButton, areElementsDisabled);
   urlInput.disabled = areElementsDisabled;
   feedback.classList.remove('alert-info', 'alert-success', 'alert-danger');
   feedback.classList.add(feedbackClass);
   feedback.textContent = feedbackText;
 };
 
-const renderSubmitFormState = (state, domElements) => {
-  const { form, urlInput, feedback } = domElements;
+const renderForm = (state, domElements) => {
+  const {
+    form, urlInput, feedback, submitButton,
+  } = domElements;
 
   switch (state.form.processState) {
     case 'filling':
-      feedback.textContent = '';
-      feedback.classList.remove('alert-info', 'alert-success', 'alert-danger');
-
+      resetFeedback(feedback);
       resetInputValidation(urlInput);
       break;
     case 'sending':
@@ -58,53 +141,39 @@ const renderSubmitFormState = (state, domElements) => {
       break;
     case 'finished':
       renderFormElements(domElements, false, 'alert-success', i18next.t('submitFormState.finished'));
-      form.reset();
+      renderFeeds(state, domElements);
+      doAfterDelay(
+        [
+          () => form.reset(),
+          () => resetInputValidation(urlInput),
+          () => resetFeedback(feedback),
+          () => toggleSubmitButton(submitButton, true),
+        ],
+        3,
+      );
       break;
     case 'failed':
       renderFormElements(domElements, false, 'alert-danger', state.form.processError);
-      resetInputValidation(urlInput);
+      doAfterDelay(
+        [
+          () => resetInputValidation(urlInput),
+          () => resetFeedback(feedback),
+        ],
+        3,
+      );
       break;
     default:
       throw new Error(`Unknown state: ${state.form.processState}`);
   }
 };
 
-const createFeedElement = ({ feed, posts }) => {
-  const feedContentMarkup = `
-    <div class="card-header" id="${feed.id}">
-      <h2 class="mb-0">
-        <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapse-${feed.id}" aria-expanded="true" aria-controls="collapse-${feed.id}">
-          ${feed.title}
-        </button>
-      </h2>
-    </div>
+const renderUpdateState = (state, domElements) => {
+  const isAnyUpdated = state.feeds.some(({ updated }) => updated === true);
+  const isAnyUpdateFailed = state.feeds.some(({ updated }) => updated === 'failed');
 
-    <div id="collapse-${feed.id}" class="collapse" aria-labelledby="${feed.id}" data-parent="#accordion">
-      <div id="posts-container" class="card-body">
-      </div>
-    </div>
-  `;
-
-  const feedContainer = document.createElement('div');
-  feedContainer.classList.add('card');
-  feedContainer.insertAdjacentHTML('afterbegin', feedContentMarkup);
-
-  const postsContainer = feedContainer.querySelector('#posts-container');
-  const postsMarkup = posts.map(({ title, link }) => `
-    <a class="btn btn-outline-info m-1" href="${link}" target="_blank">${title}</a>
-  `);
-
-  postsContainer.insertAdjacentHTML('afterbegin', postsMarkup.join(''));
-
-  return feedContainer;
-};
-
-const renderFeeds = (feeds, { feedsContainer }) => {
-  feedsContainer.innerHTML = '';
-
-  feeds.forEach((feed) => {
-    feedsContainer.appendChild(feed);
-  });
+  if (isAnyUpdated || isAnyUpdateFailed) {
+    renderFeeds(state, domElements);
+  }
 };
 
 const makeWatchedState = (state, domElements) => {
@@ -112,17 +181,11 @@ const makeWatchedState = (state, domElements) => {
     if (path === 'form.errors') {
       renderInputError(watchedState, domElements);
     } else if (path === 'form.valid') {
-      domElements.submitButton.disabled = !watchedState.form.valid;
+      toggleSubmitButton(domElements.submitButton, !watchedState.form.valid);
     } else if (path === 'form.processState') {
-      renderSubmitFormState(watchedState, domElements);
-    } else if (path === 'feeds') {
-      const feeds = state.feeds.map((feed) => {
-        const posts = state.posts.filter(({ feedId }) => feedId === feed.id);
-
-        return createFeedElement({ feed, posts });
-      });
-
-      renderFeeds(feeds, domElements);
+      renderForm(watchedState, domElements);
+    } else if ((/updated$/).test(path)) {
+      renderUpdateState(watchedState, domElements);
     }
   });
 

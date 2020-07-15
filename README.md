@@ -32,4 +32,6 @@
 http://lorem-rss.herokuapp.com/feed (updates once a minute)
 http://lorem-rss.herokuapp.com/feed?unit=second&interval=30 (update every 30 seconds)
 https://developer.mozilla.org/ru/docs/feeds/rss/all
+https://css-tricks.com/feed/
+https://www.habrahabr.ru/rss/main
 ```

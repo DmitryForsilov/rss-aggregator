@@ -17,6 +17,7 @@
     "rules": {
       "no-console": "off",
       "no-param-reassign": "off",
-      "import/extensions": "off"
+      "import/extensions": "off",
+      "no-underscore-dangle": "off"
     }
 }

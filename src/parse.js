@@ -1,16 +1,8 @@
-const parse = (response) => {
-  const requestUrl = response.config.url;
+const parse = (data) => {
   const xmlParser = new DOMParser();
-  const parsedData = xmlParser.parseFromString(response.data, 'text/xml');
+  const parsedData = xmlParser.parseFromString(data, 'text/xml');
 
-  const title = parsedData.querySelector('channel > title').textContent;
-  const postsData = [...parsedData.querySelectorAll('item')]
-    .map((postNode) => ({
-      title: postNode.querySelector('title').textContent,
-      link: postNode.querySelector('link').textContent,
-    }));
-
-  return { title, postsData, requestUrl };
+  return parsedData;
 };
 
 export default parse;

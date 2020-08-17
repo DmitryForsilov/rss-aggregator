@@ -1,34 +1,21 @@
+import 'bootstrap';
+import 'bootstrap/dist/css/bootstrap.min.css';
 import * as yup from 'yup';
 import _ from 'lodash';
 import i18next from 'i18next';
 import axios from 'axios';
+import { PROXY, AUTOUPDATE_INTERVAL_IN_SEC } from './constants.js';
 import parse from './parse.js';
 import makeWatchedState from './makeWatchedState.js';
-import 'bootstrap';
 import en from './locales/en.js';
-import PostsAutoupdater from './PostsAutoupdater.js';
 
-const makeUrlWithProxy = (url) => {
-  const proxy = 'https://cors-anywhere.herokuapp.com/';
-  const normalizeUrl = url.trim().replace(/^https?:\/\//i, '');
-
-  return `${proxy}${normalizeUrl}`;
-};
-
-yup.addMethod(yup.string, 'isFeedUnique', function (urls) { // eslint-disable-line func-names
-  return this.test(function (value) { // eslint-disable-line func-names
-    const { path, createError } = this;
-    const isUnique = !urls.some((url) => url === makeUrlWithProxy(value));
-
-    return isUnique ? value : createError({ path, message: i18next.t('errors.feedIsNotUnique') });
-  });
-});
+const makeUrlWithProxy = (proxy, url) => proxy.concat(url.trim());
+const makeUrlWithoutProxy = (proxy, url) => url.replace(proxy, '');
 
 const validateForm = (state) => {
-  const urls = state.feeds.map(({ requestUrl }) => requestUrl);
-
+  const urls = state.feeds.map(({ requestUrl }) => makeUrlWithoutProxy(PROXY, requestUrl));
   const schema = yup.object().shape({
-    url: yup.string().url().isFeedUnique(urls).required(),
+    url: yup.string().url().notOneOf(urls, `${i18next.t('errors.feedIsNotUnique')}`).required(),
   });
 
   try {
@@ -40,14 +27,23 @@ const validateForm = (state) => {
   }
 };
 
+const getFeedData = (parsedData) => {
+  const title = parsedData.querySelector('channel > title').textContent;
+  const postsData = [...parsedData.querySelectorAll('item')]
+    .map((postNode) => ({
+      title: postNode.querySelector('title').textContent,
+      link: postNode.querySelector('link').textContent,
+    }));
+
+  return { title, postsData };
+};
+
 const processFeedData = (data) => {
   const feedId = _.uniqueId();
 
   const feed = {
     id: feedId,
     updated: false,
-    updateError: null,
-    badge: null,
     ...data,
   };
 
@@ -84,47 +80,42 @@ const updatePostsState = (state, posts) => {
   state.posts = [...state.posts, ...posts];
 };
 
-const checkNewPostsCallback = (state) => (postsAutoupdater) => {
-  const currentFeed = state.feeds.find(({ id }) => id === postsAutoupdater._feedId);
-  const currentFeedIndex = state.feeds.indexOf(currentFeed);
-
-  state.feeds[currentFeedIndex].updated = false;
-
-  axios({
-    method: 'get',
-    url: postsAutoupdater._requestUrl,
-  })
-    .then((response) => {
-      const { postsData } = parse(response);
-      const posts = processPostsData(postsData, postsAutoupdater._feedId);
-      const currentPosts = state.posts.filter((post) => post.feedId === postsAutoupdater._feedId);
-      const newPosts = _.differenceBy(posts, currentPosts, 'title');
-
-      if (newPosts.length > 0) {
-        updatePostsState(state, newPosts);
-
-        state.feeds[currentFeedIndex].badge = 'success';
-        state.feeds[currentFeedIndex].updated = true;
-      }
+const setAutoupdate = (state, feed, autoupdateInterval) => {
+  const checkNewPosts = () => {
+    axios({
+      method: 'get',
+      url: feed.requestUrl,
     })
-    .catch((error) => {
-      state.feeds[currentFeedIndex].badge = 'fail';
-      state.feeds[currentFeedIndex].updated = 'failed';
+      .then((response) => {
+        const parsedData = parse(response.data);
+        const { postsData } = getFeedData(parsedData);
+        const posts = processPostsData(postsData, feed.id);
+        const currentPosts = state.posts.filter((post) => post.feedId === feed.id);
+        const newPosts = _.differenceBy(posts, currentPosts, 'title');
 
-      if (error.response) {
-        state.feeds[currentFeedIndex].updateError = i18next.t('postsUpdated.fail', { issue: `${error.response.status} ${error.response.statusText}` });
-      } else {
-        state.feeds[currentFeedIndex].updateError = i18next.t('postsUpdated.fail', { issue: 'Unknown issue.' });
-      }
-    });
-};
+        if (newPosts.length > 0) {
+          feed.updated = true;
 
-const domElements = {
-  form: document.forms.form,
-  urlInput: document.forms.form.elements.url,
-  submitButton: document.forms.form.elements.button,
-  feedback: document.forms.form.querySelector('.feedback'),
-  feedsContainer: document.querySelector('.accordion'),
+          updatePostsState(state, newPosts);
+        }
+      })
+      .catch((error) => {
+        if (error.response) {
+          feed.updated = 'failedNetworkIssue';
+        } else {
+          feed.updated = 'failedUnknownIssue';
+        }
+
+        console.log(error);
+      })
+      .finally(() => {
+        feed.updated = false;
+      });
+
+    setTimeout(() => checkNewPosts(), autoupdateInterval * 1000);
+  };
+
+  setTimeout(() => checkNewPosts(), autoupdateInterval * 1000);
 };
 
 const runApp = async () => {
@@ -138,8 +129,7 @@ const runApp = async () => {
 
   const state = {
     form: {
-      processState: 'filling',
-      processError: null,
+      processState: null,
       fields: {
         url: '',
       },
@@ -150,6 +140,13 @@ const runApp = async () => {
     posts: [],
   };
 
+  const domElements = {
+    form: document.forms.form,
+    urlInput: document.forms.form.elements.url,
+    submitButton: document.forms.form.elements.button,
+    feedback: document.forms.form.querySelector('.feedback'),
+    feedsContainer: document.querySelector('.accordion'),
+  };
   const watchedState = makeWatchedState(state, domElements);
 
   const formInputHandler = (event) => {
@@ -157,44 +154,44 @@ const runApp = async () => {
 
     watchedState.form.processState = 'filling';
     watchedState.form.fields[field.name] = field.value.trim();
+
     updateValidationState(watchedState);
   };
 
   const formSubmitHandler = (event) => {
     event.preventDefault();
 
+    const formData = new FormData(event.target);
+
     watchedState.form.processState = 'sending';
-    const urlWithProxy = makeUrlWithProxy(domElements.urlInput.value);
+    const urlWithProxy = makeUrlWithProxy(PROXY, formData.get('url'));
 
     axios({
       method: 'get',
       url: urlWithProxy,
     })
       .then((response) => {
-        const { title, postsData, requestUrl } = parse(response);
+        const requestUrl = response.config.url;
+        const parsedData = parse(response.data);
+        const { title, postsData } = getFeedData(parsedData);
         const feed = processFeedData({ title, requestUrl });
         const posts = processPostsData(postsData, feed.id);
 
         updateFeedsState(watchedState, feed);
         updatePostsState(watchedState, posts);
-
-        const intervalInSeconds = 5;
-        const postsAutoupdater = new PostsAutoupdater(
-          feed.id, urlWithProxy, checkNewPostsCallback(watchedState),
-        );
-        postsAutoupdater.setAutoupdate(intervalInSeconds);
+        setAutoupdate(watchedState, feed, AUTOUPDATE_INTERVAL_IN_SEC);
 
         watchedState.form.processState = 'finished';
         watchedState.form.valid = false;
       })
       .catch((error) => {
         if (error.response) {
-          watchedState.form.processError = i18next.t('errors.networkIssue', { errorStatus: error.response.status, errorText: error.response.statusText });
+          watchedState.form.processState = 'failedNetworkIssue';
         } else {
-          watchedState.form.processError = i18next.t('errors.unsupportedFeedFormat');
+          watchedState.form.processState = 'failedUnknownIssue';
         }
 
-        watchedState.form.processState = 'failed';
+        console.log(error);
       });
   };
 

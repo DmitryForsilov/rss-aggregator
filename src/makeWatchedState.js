@@ -1,5 +1,6 @@
 import onChange from 'on-change';
 import i18next from 'i18next';
+import _ from 'lodash';
 
 const doAfterDelay = (functions, delayInSec) => {
   setTimeout(() => {
@@ -30,18 +31,18 @@ const resetFeedback = (feedbackElement) => {
   feedbackElement.classList.remove('alert-info', 'alert-success', 'alert-danger');
 };
 
-const createFeedElement = ({ feed, posts }, state) => {
+const createFeedElement = (feedData) => {
   const feedContentMarkup = `
-    <div class="card-header" id="${feed.id}">
+    <div class="card-header" id="${feedData.id}">
       <h2 class="mb-0">
-        <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapse-${feed.id}" aria-expanded="true" aria-controls="collapse-${feed.id}">
-          ${feed.title}<span class="badge ml-2"></span>
+        <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapse-${feedData.id}" aria-expanded="true" aria-controls="collapse-${feedData.id}">
+          ${feedData.title}<span id="update-badge-${feedData.id}" class="badge ml-2"></span>
         </button>
       </h2>
     </div>
 
-    <div id="collapse-${feed.id}" class="collapse" aria-labelledby="${feed.id}" data-parent="#accordion">
-      <div id="posts-container" class="card-body">
+    <div id="collapse-${feedData.id}" class="collapse" aria-labelledby="${feedData.id}" data-parent="#accordion">
+      <div id="posts-container-${feedData.id}" class="card-body">
       </div>
     </div>
   `;
@@ -50,57 +51,69 @@ const createFeedElement = ({ feed, posts }, state) => {
   feedContainer.classList.add('card');
   feedContainer.insertAdjacentHTML('afterbegin', feedContentMarkup);
 
-  const postsContainer = feedContainer.querySelector('#posts-container');
-  const postsMarkup = posts.map(({ title, link }) => `
-    <a class="btn btn-outline-info m-1" href="${link}" target="_blank">${title}</a>
-  `);
-
-  postsContainer.insertAdjacentHTML('afterbegin', postsMarkup.join(''));
-
   const openFeedButton = feedContainer.querySelector('.btn');
   const badge = feedContainer.querySelector('.badge');
 
-  const resetBadge = () => {
-    badge.classList.remove('badge-success', 'badge-warning');
-    badge.textContent = '';
+  const resetBadge = (badgeElement) => {
+    badgeElement.classList.remove('badge-success', 'badge-warning');
+    badgeElement.textContent = '';
   };
 
-  if (feed.badge === 'success') {
-    badge.classList.add('badge-success');
-    badge.textContent = i18next.t('postsUpdated.sucess');
-  } else if (feed.badge === 'fail') {
-    badge.classList.add('badge-warning');
-    badge.textContent = feed.updateError;
-  }
-
-  openFeedButton.addEventListener('click', () => {
-    resetBadge();
-
-    // Реализация удаления бейджика через state
-    const currentFeed = state.feeds.find(({ id }) => id === feed.id);
-    const currentFeedIndex = state.feeds.indexOf(currentFeed);
-    state.feeds[currentFeedIndex].badge = null;
-  });
+  openFeedButton.addEventListener('click', () => resetBadge(badge));
 
   return feedContainer;
 };
 
-const renderFeeds = (state, { feedsContainer }) => {
-  const feeds = state.feeds.map((feed) => {
-    const posts = state.posts.filter(({ feedId }) => feedId === feed.id);
+const renderFeed = (feedsContainer, feedToRender, noFeedsRenderedBefore) => {
+  if (noFeedsRenderedBefore) {
+    feedsContainer.innerHTML = '';
+  }
 
-    return createFeedElement({ feed, posts }, state);
-  });
+  const feedElement = createFeedElement(feedToRender);
 
-  feedsContainer.innerHTML = '';
+  feedsContainer.appendChild(feedElement);
+};
 
-  feeds.forEach((feed) => {
-    feedsContainer.appendChild(feed);
+const renderPosts = (postsGroupedByFeedId, feedsContainer) => {
+  Object.entries(postsGroupedByFeedId).forEach(([feedId, posts]) => {
+    const postsContainer = feedsContainer.querySelector(`#posts-container-${feedId}`);
+    const postsMarkup = posts.map(({ title, link }) => `
+      <a class="btn btn-outline-info m-1" href="${link}" target="_blank">${title}</a>
+    `).join('');
+
+    postsContainer.insertAdjacentHTML('afterbegin', postsMarkup);
   });
 };
 
-const renderInputError = (state, { urlInput, feedback }) => {
-  const error = state.form.errors[urlInput.name];
+const renderUpdateBadges = (feedsToRenderBadges, feedsContainer) => {
+  feedsToRenderBadges.forEach(({ id, updated }) => {
+    const badgeElement = feedsContainer.querySelector(`#update-badge-${id}`);
+
+    switch (updated) {
+      case false:
+        break;
+      case true:
+        badgeElement.classList.add('badge-success');
+        badgeElement.textContent = i18next.t('postsUpdated.sucess');
+        break;
+      case 'failedNetworkIssue':
+      case 'failedUnknownIssue': {
+        const errorMessage = updated === 'failedNetworkIssue'
+          ? i18next.t('postsUpdated.networkIssue')
+          : i18next.t('postsUpdated.unknownIssue');
+
+        badgeElement.classList.add('badge-warning');
+        badgeElement.textContent = errorMessage;
+        break;
+      }
+      default:
+        throw new Error(`Unknown updated state: ${updated}`);
+    }
+  });
+};
+
+const renderInputError = (errors, { urlInput, feedback }) => {
+  const error = errors[urlInput.name];
 
   if (!error) {
     feedback.textContent = '';
@@ -127,12 +140,14 @@ const renderFormElements = (domElements, areElementsDisabled, feedbackClass, fee
   feedback.textContent = feedbackText;
 };
 
-const renderForm = (state, domElements) => {
+const renderForm = (processState, domElements) => {
   const {
     form, urlInput, feedback, submitButton,
   } = domElements;
 
-  switch (state.form.processState) {
+  switch (processState) {
+    case null:
+      break;
     case 'filling':
       resetFeedback(feedback);
       resetInputValidation(urlInput);
@@ -142,7 +157,6 @@ const renderForm = (state, domElements) => {
       break;
     case 'finished':
       renderFormElements(domElements, false, 'alert-success', i18next.t('submitFormState.finished'));
-      renderFeeds(state, domElements);
       doAfterDelay(
         [
           () => form.reset(),
@@ -153,8 +167,14 @@ const renderForm = (state, domElements) => {
         3,
       );
       break;
-    case 'failed':
-      renderFormElements(domElements, false, 'alert-danger', state.form.processError);
+    case 'failedNetworkIssue':
+    case 'failedUnknownIssue':
+    {
+      const errorMessage = processState === 'failedNetworkIssue'
+        ? i18next.t('submitFormState.networkIssue')
+        : i18next.t('submitFormState.unknownIssue');
+
+      renderFormElements(domElements, false, 'alert-danger', errorMessage);
       doAfterDelay(
         [
           () => resetInputValidation(urlInput),
@@ -163,30 +183,33 @@ const renderForm = (state, domElements) => {
         3,
       );
       break;
+    }
     default:
-      throw new Error(`Unknown state: ${state.form.processState}`);
-  }
-};
-
-const renderUpdateState = (state, domElements) => {
-  const isAnyUpdated = state.feeds.some(({ updated }) => updated === true);
-  const isAnyUpdateFailed = state.feeds.some(({ updated }) => updated === 'failed');
-
-  if (isAnyUpdated || isAnyUpdateFailed) {
-    renderFeeds(state, domElements);
+      throw new Error(`Unknown processState: ${processState}`);
   }
 };
 
 const makeWatchedState = (state, domElements) => {
-  const watchedState = onChange(state, (path) => {
+  const watchedState = onChange(state, (path, value, previousValue) => {
     if (path === 'form.errors') {
-      renderInputError(watchedState, domElements);
+      renderInputError(watchedState.form.errors, domElements);
     } else if (path === 'form.valid') {
       toggleSubmitButton(domElements.submitButton, !watchedState.form.valid);
     } else if (path === 'form.processState') {
-      renderForm(watchedState, domElements);
-    } else if ((/updated$/).test(path)) {
-      renderUpdateState(watchedState, domElements);
+      renderForm(watchedState.form.processState, domElements);
+    } else if (path === 'feeds') {
+      const feedToRender = _.differenceBy(value, previousValue, 'id')[0];
+      const noFeedsRenderedBefore = previousValue.length === 0;
+
+      renderFeed(domElements.feedsContainer, feedToRender, noFeedsRenderedBefore);
+    } else if (path === 'posts') {
+      const postsToRender = _.differenceWith(value, previousValue, _.isEqual);
+      const postsGroupedByFeedId = _.groupBy(postsToRender, 'feedId');
+      const feedsIds = Object.keys(postsGroupedByFeedId);
+      const feedsToRenderBadges = state.feeds.filter(({ id }) => feedsIds.includes(id));
+
+      renderPosts(postsGroupedByFeedId, domElements.feedsContainer);
+      renderUpdateBadges(feedsToRenderBadges, domElements.feedsContainer);
     }
   });
 

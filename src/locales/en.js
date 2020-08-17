@@ -3,15 +3,16 @@ export default {
     submitFormState: {
       sending: 'Please, wait...',
       finished: 'Rss feed loaded successfully!',
+      networkIssue: 'Network issue.',
+      unknownIssue: 'Unknown issue',
     },
     errors: {
-      networkIssue: 'Network issue: {{errorStatus}} {{errorText}}',
-      unsupportedFeedFormat: 'Unsupported feed format.',
       feedIsNotUnique: 'This feed is already exist',
     },
     postsUpdated: {
       sucess: 'Posts was updated!',
-      fail: 'Can"t update posts. {{issue}}',
+      networkIssue: 'Can"t update posts. Network issue.',
+      unknownIssue: 'Can"t update posts. Unknown issue',
     },
   },
 };

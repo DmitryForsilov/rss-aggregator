@@ -96,16 +96,10 @@ const renderUpdateBadges = (feedsToRenderBadges, feedsContainer) => {
         badgeElement.classList.add('badge-success');
         badgeElement.textContent = i18next.t('postsUpdated.sucess');
         break;
-      case 'failedNetworkIssue':
-      case 'failedUnknownIssue': {
-        const errorMessage = updated === 'failedNetworkIssue'
-          ? i18next.t('postsUpdated.networkIssue')
-          : i18next.t('postsUpdated.unknownIssue');
-
+      case 'failed':
         badgeElement.classList.add('badge-warning');
-        badgeElement.textContent = errorMessage;
+        badgeElement.textContent = i18next.t('postsUpdated.failed');
         break;
-      }
       default:
         throw new Error(`Unknown updated state: ${updated}`);
     }
@@ -167,14 +161,8 @@ const renderForm = (processState, domElements) => {
         3,
       );
       break;
-    case 'failedNetworkIssue':
-    case 'failedUnknownIssue':
-    {
-      const errorMessage = processState === 'failedNetworkIssue'
-        ? i18next.t('submitFormState.networkIssue')
-        : i18next.t('submitFormState.unknownIssue');
-
-      renderFormElements(domElements, false, 'alert-danger', errorMessage);
+    case 'failed':
+      renderFormElements(domElements, false, 'alert-danger', i18next.t('submitFormState.failed'));
       doAfterDelay(
         [
           () => resetInputValidation(urlInput),
@@ -183,26 +171,23 @@ const renderForm = (processState, domElements) => {
         3,
       );
       break;
-    }
     default:
       throw new Error(`Unknown processState: ${processState}`);
   }
 };
 
-const makeWatchedState = (state, domElements) => {
-  const watchedState = onChange(state, (path, value, previousValue) => {
-    if (path === 'form.errors') {
-      renderInputError(watchedState.form.errors, domElements);
-    } else if (path === 'form.valid') {
-      toggleSubmitButton(domElements.submitButton, !watchedState.form.valid);
-    } else if (path === 'form.processState') {
-      renderForm(watchedState.form.processState, domElements);
-    } else if (path === 'feeds') {
+const initView = (state, domElements) => {
+  const mapping = {
+    'form.errors': () => renderInputError(state.form.errors, domElements),
+    'form.valid': () => toggleSubmitButton(domElements.submitButton, !state.form.valid),
+    'form.processState': () => renderForm(state.form.processState, domElements),
+    feeds: ({ value, previousValue }) => {
       const feedToRender = _.differenceBy(value, previousValue, 'id')[0];
       const noFeedsRenderedBefore = previousValue.length === 0;
 
       renderFeed(domElements.feedsContainer, feedToRender, noFeedsRenderedBefore);
-    } else if (path === 'posts') {
+    },
+    posts: ({ value, previousValue }) => {
       const postsToRender = _.differenceWith(value, previousValue, _.isEqual);
       const postsGroupedByFeedId = _.groupBy(postsToRender, 'feedId');
       const feedsIds = Object.keys(postsGroupedByFeedId);
@@ -210,10 +195,16 @@ const makeWatchedState = (state, domElements) => {
 
       renderPosts(postsGroupedByFeedId, domElements.feedsContainer);
       renderUpdateBadges(feedsToRenderBadges, domElements.feedsContainer);
+    },
+  };
+
+  const watchedState = onChange(state, (path, value, previousValue) => {
+    if (mapping[path]) {
+      mapping[path]({ value, previousValue });
     }
   });
 
   return watchedState;
 };
 
-export default makeWatchedState;
+export default initView;

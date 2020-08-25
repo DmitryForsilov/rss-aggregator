@@ -12,7 +12,7 @@
 - Form input validation
 - Form submit validation
 - Rendering errors and another messages
-- Posts autoupdate (request in every 5 seconds)
+- Posts autoupdate (request in every 15 seconds)
 
 ### Used in project:
 - **MVC**
@@ -33,6 +33,7 @@
 ```
 http://lorem-rss.herokuapp.com/feed (updates once a minute)
 http://lorem-rss.herokuapp.com/feed?unit=second&interval=30 (update every 30 seconds)
+http://lorem-rss.herokuapp.com/feed?unit=second&interval=15 (update every 15 seconds)
 https://developer.mozilla.org/ru/docs/feeds/rss/all
 https://css-tricks.com/feed/
 https://www.habrahabr.ru/rss/main

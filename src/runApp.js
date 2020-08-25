@@ -11,10 +11,8 @@ import en from './locales/en.js';
 const corsAnywhereProxy = 'https://cors-anywhere.herokuapp.com/';
 
 const makeUrlWithProxy = (proxy, url) => proxy.concat(url.trim());
-const makeUrlWithoutProxy = (proxy, url) => url.replace(proxy, '');
 
-const validateForm = (feeds, fields) => {
-  const urls = feeds.map(({ requestUrl }) => makeUrlWithoutProxy(corsAnywhereProxy, requestUrl));
+const validateForm = (urls, fields) => {
   const schema = yup.object().shape({
     url: yup.string().url().notOneOf(urls, `${i18next.t('errors.feedIsNotUnique')}`).required(),
   });
@@ -51,7 +49,8 @@ const processPostsData = (postsData, feedId) => {
 };
 
 const updateValidationState = (state) => {
-  const error = validateForm(state.feeds, state.form.fields);
+  const urls = state.feeds.map(({ requestUrl }) => requestUrl);
+  const error = validateForm(urls, state.form.fields);
 
   if (_.isEqual(error, {})) {
     state.form.valid = true;
@@ -67,11 +66,11 @@ const updateFeedsState = (state, feed) => {
 };
 
 const updatePostsState = (state, posts) => {
-  state.posts = [...state.posts, ...posts];
+  posts.forEach((post) => state.posts.push(post));
 };
 
 const checkNewPosts = (state, feed, updateIntervalInSec) => {
-  axios.get(feed.requestUrl)
+  axios.get(makeUrlWithProxy(corsAnywhereProxy, feed.requestUrl))
     .then((response) => {
       const { postsData } = parse(response.data);
       const posts = processPostsData(postsData, feed.id);
@@ -144,17 +143,17 @@ const runApp = async () => {
     event.preventDefault();
 
     const formData = new FormData(event.target);
+    const url = formData.get('url');
 
     watchedState.form.processState = 'sending';
-    const urlWithProxy = makeUrlWithProxy(corsAnywhereProxy, formData.get('url'));
 
-    axios.get(urlWithProxy)
+    axios.get(makeUrlWithProxy(corsAnywhereProxy, url))
       .then((response) => {
-        const requestUrl = response.config.url;
+        const requestUrl = url;
         const { title, postsData } = parse(response.data);
         const feed = processFeedData({ title, requestUrl });
         const posts = processPostsData(postsData, feed.id);
-        const updateIntervalInSec = 5;
+        const updateIntervalInSec = 15;
 
         updateFeedsState(watchedState, feed);
         updatePostsState(watchedState, posts);

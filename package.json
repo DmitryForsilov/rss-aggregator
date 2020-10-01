@@ -1,5 +1,5 @@
 {
-  "name": "frontend-project-lvl3",
+  "name": "rss-aggregator",
   "version": "0.3.2",
   "description": "RSS Reader",
   "main": "index.js",
@@ -10,14 +10,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DmitryForsilov/frontend-project-lvl3.git"
+    "url": "git+https://github.com/DmitryForsilov/rss-aggregator.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/DmitryForsilov/frontend-project-lvl3/issues"
+    "url": "https://github.com/DmitryForsilov/rss-aggregator/issues"
   },
-  "homepage": "https://github.com/DmitryForsilov/frontend-project-lvl3#readme",
+  "homepage": "https://github.com/DmitryForsilov/rss-aggregator#readme",
   "devDependencies": {
     "@babel/cli": "^7.10.4",
     "@babel/core": "^7.10.4",

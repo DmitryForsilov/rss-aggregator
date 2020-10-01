@@ -16,6 +16,7 @@ The project was reviewed by Hexlet.
 - Posts autoupdate (request in every 15 seconds)
 
 ## Used in project:
+- **MVC**
 - **bootstrap**
 - **lodash**
 - **yup**

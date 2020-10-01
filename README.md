@@ -1,12 +1,12 @@
-[![Maintainability](https://api.codeclimate.com/v1/badges/3e1e7d6753941fd16810/maintainability)](https://codeclimate.com/github/DmitryForsilov/frontend-project-lvl3/maintainability)
-![CI](https://github.com/DmitryForsilov/frontend-project-lvl3/workflows/CI/badge.svg)
+[![Maintainability](https://api.codeclimate.com/v1/badges/9e9ed9f41894811df0bb/maintainability)](https://codeclimate.com/github/DmitryForsilov/rss-aggregator/maintainability)
+![CI](https://github.com/DmitryForsilov/rss-aggregator/workflows/CI/badge.svg)
 
 # RSS Aggregator
 Multiple rss reader.
 
 The project was reviewed by Hexlet.
 
-[Link to deployed project](https://frontend-project-lvl3-drab.vercel.app/)
+[Link to deployed project](https://rss-aggregator-df.vercel.app/)
 
 ## Features:
 - Adding multiple RSS feeds

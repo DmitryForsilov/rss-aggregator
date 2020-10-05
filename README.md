@@ -4,7 +4,7 @@
 # RSS Aggregator
 Multiple rss reader.
 
-The project was reviewed by Hexlet.
+This project was reviewed by Hexlet.
 
 [Link to deployed project](https://rss-aggregator-df.vercel.app/)
 
